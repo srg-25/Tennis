@@ -10,6 +10,8 @@ This is the main parts description only. See more details in the python source a
 
 ### Classes
 
+#### ./Agent folder
+
 ```jupyterpython
 class Environment_Agent
     'This is a class which connect between environment and an environment agnostic agent algorithm'
@@ -22,6 +24,7 @@ class Agent:
 
     # .... Some methods ....
 ```
+#### ./Model folder
 
 ```jupyterpython
 class Actor(nn.Module):
@@ -132,7 +135,7 @@ class Environment_Agent:
         pass
 ```
 
-### Calculate action in the train method above
+### Methods to calculate action in the train method above
 
 #### Environment_Agent.act methode
 
@@ -553,12 +556,13 @@ Critic(
 )
 ```
 
-## To configure and run the code
+## Algorithm - Configuration
 
-### To configure the algorithm flow
+Config/CC_MADDPG_config.py file contains all default configuration parameters.
 
-#### Change default configuration parameters in main_train.py train_env_agents(...) function
+To configure the algorithm flow change these default configuration parameters in train_env_agents(...) function from main_train.py file.
 
+For example:
 ```jupyterpython
 def train_env_agents(...):
     
@@ -614,8 +618,6 @@ def train_env_agents(...):
     cfg['config_train']['critic_regularization'] = 'DropOut'        # 'No', 'DropOut' 'BatchNormalization' Citic Regularization method
     cfg['config_train']['drop_out_val']          = 0.25             # A percent to 'DropOut'. Udacity knowledge
 ```
-
-Config/CC_MADDPG_config.py file contains all configuration parameters.
 
 n_episodes is a number of episodes to train. You may change it in the main_train.py file.
 For Example
