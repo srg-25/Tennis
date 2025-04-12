@@ -1,5 +1,7 @@
 """
 Use this to play and train MADDPG agents.
+
+[1] Base Weights files used to achieve Agents scores 0.5 avg #Load trained model weights where got 0.5 in 1800 episodes itself
 """
 import copy
 import os.path
@@ -20,9 +22,9 @@ from Utils.logger_utils import create_logger
 from Utils.os_io import copy_tree
 
 from Config.CC_MADDPG_config import config_agent
-from Agent.ddpg_env_agent import Environment_Agent
-
-from Utils.ddpg_utils import check_plot_average_episode_score, plot_training_sessions_history, check_gradient_loss
+from Agent.ddpg_env_agent import Environment_Agent, CategoricalReplayBuffers_statistics
+from Utils.ddpg_utils import check_plot_average_episode_score, plot_training_sessions_history, check_gradient_loss, \
+    plot_score_1_dim
 
 
 # ----------------- Training/Playing -------------------
@@ -106,31 +108,36 @@ def train_env_agents(n_episodes, tmax, env=None, env_seed=None,
         env = UnityEnvironment(file_name=env_file_name, seed=env_seed)
     brain_name = env.brain_names[0]
     cfg = config_agent.copy()
-    cfg['config_train']['buffer_size']      = int(1e6)  # int(1e6)  # replay buffer size
-    cfg['config_train']['batch_size']       = 128       # 128      # minibatch size
-    cfg['config_train']['gamma']            = 0.95      # 0.91 + rand_u(0.05)      # 0.95  # discount factor
-    cfg['config_train']['tau']              = 1e-2      # 8.7e-3 + rand_u(0.5e-2)  # 1e-2  # scale factor for soft update of target parameters
-    cfg['config_train']['lr_actor']         = 1e-4      # 6.7e-5 + rand_u(0.5e-4)  # 1e-4  # learning rate of the actor
-    cfg['config_train']['lr_critic']        = 3e-4      # 7e-4 + rand_u(0.5e-3)    # 3e-4  # learning rate of the critic
-    cfg['config_train']['weight_decay']     = 0         # 0         # L2 weight decay
-    cfg['config_train']['actor_update_frequency'] = 0.75  # 0.75  # Udacity GPT: update an actor NN weights frequency per iteration
-    cfg['config_train']['critic_update_frequency'] = 1.25 # 1.25 # Udacity GPT: update an critic NN weights frequency per iteration
+    cfg['config_train']['buffer_size']      = int(1e5)  # int(1e6)  # replay buffer size
+    cfg['config_train']['batch_size']       = 256       # 256  # 512  # 1024   # minibatch size
+    cfg['config_train']['gamma']            = [0.99, 0.99]  # 0.95  # discount factor
+    cfg['config_train']['tau']              = [0.01, 0.01]  # 1e-2  # scale factor for soft update of target parameters
+    cfg['config_train']['lr_actor']         = [1e-4, 1e-4]  # 1e-4  # learning rate of the actor
+    cfg['config_train']['lr_critic']        = [0.0003, 0.0003]  # 3e-4  # learning rate of the critic
+    cfg['config_train']['weight_decay']     = [0, 0]       # 0     # L2 weight decay
+    cfg['config_train']['actor_update_frequency'] = 0.75   # 0.75  # Udacity GPT: update an actor NN weights frequency per iteration
+    cfg['config_train']['critic_update_frequency'] = 1.25  # 1.25 # Udacity GPT: update an critic NN weights frequency per iteration
 
-    cfg['config_train']['replay_non_zero_rewards_only'] = False     # True  # Collect experiments with
-                                                                    # non zeros rewards only.
-                                                                    # Otherwise, collect all experiments
+    cfg['config_train']['min_epoch_reward_to_collect_experiences'] = 0.11  # Collect an epoch experiments
+                                                                           # if the epoch received such reward or more.
+                                                                           # 0.06 Senthil[https://knowledge.udacity.com/questions/303326]
+
     cfg['config_train']['replay_batch_positive_rewards_part'] = 0.75  # Udacity GPT. It is the part of positive reward experiences
                                                                     # in a batch
-    cfg['config_train']['replay_batch_negative_rewards_part'] = 0.20  # Udacity GPT. It is the part of negative reward experiences
-                                                                    # in a batch.
-                                                                    # Other part contains zero reward experiences
+    cfg['config_train']['swap_agents_experience']   = False         # Set True to Swap agent[0] experience
+                                                                    # with agent[1] experience
+    cfg['config_train']['swap_agents_probability'] = 0.5            # Set 1.0 to swap agents in each sample of
+                                                                    # an experience. Set to a value from 0.0 to 1.0
+                                                                    # to swap agents in samples with the probability
+                                                                    # equals to this value.
+
     cfg['config_train']['sample_all_experiences_to_all_agents'] = False  # If True: agent[0] may receive experiences
                                                                     # from agents a[0] and a[1] at different times.
                                                                     # The same is regard agent[1].
     cfg['config_train']['save_reply_buffer']                = True  # Set True To save reply buffer
     cfg['config_train']['load_restore_reply_buffer_asis']   = False # Set True To restore reply buffer
                                                                     # with seeds and other metadata
-    cfg['config_train']['replay_sub_buf_imbalance'] = 0.0001        # It is a maximum unbalance between
+    cfg['config_train']['replay_sub_buf_imbalance'] = 0.00001       # It is a maximum unbalance between
                                                                     # positive and negative sub-buffers.
                                                                     # Which means that a positive sample will not be added
                                                                     # to the sub_positive buffer if length of sub_positive
@@ -143,21 +150,27 @@ def train_env_agents(n_episodes, tmax, env=None, env_seed=None,
     cfg['config_train']['save_reply_buffer_frequency']  = n_episodes  # A reply buffer save frequency (in episodes).
                                                                     # Set it to n_episodes
                                                                     # to save once per training (session)
-    cfg['config_train']['add_other_agent_rewards_part'] = 0.25      # 0.25 # Another agent reward part
+    cfg['config_train']['add_other_agent_rewards_part'] = 0.        # 0.25 # Another agent reward part
                                                                     # to add to this agent reward
     cfg['config_train']['use_this_agent_rewards_part'] = 1.         # 1  # 0.75  # A factor to scale this agent reward.
+    cfg['config_train']['negative_rewards_scale']   = 10.0          # To scale negative ReplyBuffer rewards.
+    cfg['config_train']['positive_rewards_scale']   = 1.0           # To scale positive ReplyBuffer rewards.
+    cfg['config_train']['zero_rewards_to_negative'] = 0  # -0.01    # To change zero reward to a negative value
+                                                                    # if another agent receive positive reward
 
-    cfg['config_train']['number_samples_to_start_learning'] = 200   # 20000 # Number samples to collect before learning
-    cfg['config_train']['add_noise']        = True                  # Set True To add random noise during training
-    cfg['config_train']['noise_sampling_uniformly'] = False         # Set True To add random noise sampled uniformly.
+    cfg['config_train']['number_samples_to_start_learning'] = 512   # 20000 # Number samples to collect before learning
+    cfg['config_train']['number_samples_before_each_update'] = 1    # 100  # Number samples to collect before each call to learning
+    cfg['config_train']['add_noise']        = [True, True]          # Set True To add random noise during training
+    cfg['config_train']['noise_sampling_uniformly'] = [False, False]  # Set True To add random noise sampled uniformly.
                                                                     # Otherwise, Use Normal distribution
-    cfg['config_train']['noise_mu']         = 0.        # 0.        # noise mean
-    cfg['config_train']['noise_theta']      = 0.15      # 0.15      # noise scale factor of (mu - noise_state)
-    cfg['config_train']['noise_sigma']      = 0.44      # 0.44      # noise scale factor of (mu - noise_state)
-    cfg['config_train']['noise_sigma_reduction'] = 0.95  # 0.97     # To reduce sigma during an episode
+    cfg['config_train']['add_noise']        = [True, True]          # True  # To train with or without agents noise
+    cfg['config_train']['noise_mu']         = [0., 0.]              # 0.  # noise mean
+    cfg['config_train']['noise_theta']      = [0.15, 0.155]         # 0.15 # noise scale factor of (mu - noise_state)
+    cfg['config_train']['noise_sigma']      = [0.44, 0.44]          # 0.44  # noise scale factor of (mu - noise_state)
+    cfg['config_train']['noise_sigma_reduction'] = [0.99, 0.99]     # 0.97     # To reduce sigma during an episode
                                                                     # to encourage less noise in longer episodes.
                                                                     # from Udacity GPT,
-                                                                    # Jonas from https://knowledge.udacity.com/questions/65068, and others
+                                                                    # c, and others
 
     cfg['config_train']['critic_loss']          = 'mse'             # 'mse', 'sqrt_mse' - a critic loss function
     cfg['config_train']['actor_loss']           = 'critic'          # 'critic', 'inverse_critic' - an actor loss function
@@ -166,9 +179,14 @@ def train_env_agents(n_episodes, tmax, env=None, env_seed=None,
                                                                     # Values bellow are from https://knowledge.udacity.com/
     cfg['config_train']['model_fc1_units']      = 400               # Number neurones in the first hidden layer of actor and critic NN
     cfg['config_train']['model_fc2_units']      = 300               # Number neurones in the second hidden layer of actor and critic NN
-    cfg['config_train']['actor_regularization'] = 'DropOut'         # 'DropOut', 'BatchNormalization' Actor Regularization method
+    cfg['config_train']['actor_regularization'] = 'BatchNormalization'         # 'DropOut', 'BatchNormalization' Actor Regularization method
     cfg['config_train']['critic_regularization'] = 'DropOut'        # 'No', 'DropOut' 'BatchNormalization' Citic Regularization method
-    cfg['config_train']['drop_out_val']         = 0.25              # 0.25 A percent to 'DropOut'. Udacity knowledge
+    cfg['config_train']['drop_out_val']         = [0.25, 0.25]      # 0.25 A percent to 'DropOut'. Udacity knowledge
+    cfg['config_train']['init_target_by_local_nn'] = False          # Set True to initialize target NN models by local
+                                                                    # models at the beginning of any training session.
+
+    cfg['config_train']['agents_to_train']      = [0, 1]            # [0, 1] - An array of agent IDs to train.
+                                                                    # It may be [0, 1], [1, 0], [0] or [1]
 
     # ------------------- Debugging ----------------------------
     cfg['config_train']['debug_save_frequency'] = 1.0               # Frequency to save debug info as part from number
@@ -196,7 +214,7 @@ def train_env_agents(n_episodes, tmax, env=None, env_seed=None,
 
     env_agent = Environment_Agent(env, brain_name, env_seed, cfg, task_logger, device)
     task_logger.info(f'{task_name}: Going to train agents ...')
-    episode_scores, max_episode_scores = env_agent.train(
+    episode_scores, max_episode_scores, ep_steps = env_agent.train(
         n_episodes=n_episodes, max_t=tmax, local_actor_path=local_actor_path, local_critic_path=local_critic_path,
         load_reply_buffer_path=load_reply_buffer_path, save_dir=save_dir)
     agent_name = config_agent['config_train']['model_name']
@@ -208,16 +226,30 @@ def train_env_agents(n_episodes, tmax, env=None, env_seed=None,
         agent_type_name=type(env_agent).__name__, agent_name=agent_name + '_average_max_scores',
         scores=max_episode_scores, save_to_dir=save_dir)
     task_logger.info(f'{task_name}: average max scores saved in the file \'{average_max_scores_file_name}\'')
+    ep_steps_file_name = env_agent.save_scores(
+        agent_type_name=type(env_agent).__name__, agent_name=agent_name + '_num_episode_steps',
+        scores=ep_steps, save_to_dir=save_dir)
+    task_logger.info(f'{task_name}: number of episode steps saved in the file \'{ep_steps_file_name}\'')
 
     # ------------------ Plot results ---------------------
     if cfg['config_train']['debug_learning']:
         check_gradient_loss(dir_name=save_dir, file_name_suffix=results_file_name_suffix, model_name=agent_name)
+
+        r_buf_stat = CategoricalReplayBuffers_statistics()
+        r_buf_stat.plot_statistics(os.path.join(save_dir, CategoricalReplayBuffers_statistics.f_actor_prefix))
+        r_buf_stat.plot_statistics(os.path.join(save_dir, CategoricalReplayBuffers_statistics.f_critic_prefix))
+
+    title = f'Number_Steps_per_Episode'
+    plot_score_1_dim(score_path=ep_steps_file_name, title=title, x_label='Episode #', y_label='Steps',
+                     file_name_suffix='', show_figure=False, start_pos=0)
     task_logger.debug(f'{task_name}: average_max_scores_file_name=\n{average_max_scores_file_name},'
                       f'\nn_episodes={n_episodes}, results_file_name_suffix={results_file_name_suffix}')
+
     max_average_score_episode, max_average_score = check_plot_average_episode_score(
         average_scores_path=average_max_scores_file_name, tail_sz=n_episodes, file_name_suffix=results_file_name_suffix)
     task_logger.info(f'{task_name}: max_average_score={max_average_score:.4f}, '
                      f'max_average_score_episode={max_average_score_episode}')
+
     task_logger.info(f'{task_name}: -------------- End ---------------')
     return max_average_score_episode, max_average_score
 
@@ -265,7 +297,7 @@ def train_session(root_dir, session_call_id, start_seed=92736, n_episodes=2500, 
             candidate_set_sequential_order = np.argmax(max_average_scores_set)
         else: # get a random session with a maximum average score from a predefined range of top score sessions.
             sorted_ids = max_average_scores_set.argsort(kind='stable')[::-1]  # descending order
-            select_candidates_sz = 5  # It is a maximum number of sessions to consider as a pretrained andidates.
+            select_candidates_sz = 3  # 5  # It is a maximum number of sessions to consider as a pretrained candidates.
             select_candidates_len = min(len(sorted_ids), select_candidates_sz)
             candidate_sorted_id = np.random.randint(0, select_candidates_len)
             candidate_set_sequential_order = sorted_ids[candidate_sorted_id]
@@ -277,7 +309,7 @@ def train_session(root_dir, session_call_id, start_seed=92736, n_episodes=2500, 
         return session_id, session_max_average_score
 
     task_name = 'train_session'
-    task_logger = create_logger(root_dir='.', log_name=f'log_{task_name}')
+    task_logger = create_logger(root_dir=root_dir, log_name=f'log_{task_name}')
     task_logger.info(f'{task_name}: -------------- Start ---------------')
     task_logger.info(f'root_dir=\n{root_dir}, \nsession_call_id={session_call_id}, '
                      f'start_seed={start_seed}, n_episodes={n_episodes}, tmax={tmax}')
@@ -294,6 +326,29 @@ def train_session(root_dir, session_call_id, start_seed=92736, n_episodes=2500, 
             task_logger.info('Error: Meta data exists. Therefore it is not a new training session. ')
             return 1
 
+        #  --------- Check NN models existence in session_0 to load these models if its are -------------
+        db_load_dir = os.path.join(root_dir, f'session_0')
+        local_actor_path = os.path.join(db_load_dir, 'checkpoint_best_actor')
+        if os.path.isfile(os.path.join(db_load_dir, 'checkpoint_best_actor_0.pth')):
+            task_logger.info(f'Actor model file to load:\n{local_actor_path} ')
+        else:
+            local_actor_path = None
+            task_logger.info(f'Actor model files are not exist. Start training without it.')
+
+        local_critic_path = os.path.join(db_load_dir, 'checkpoint_best_critic')
+        if os.path.isfile(os.path.join(db_load_dir, 'checkpoint_best_critic_0.pth')):
+            task_logger.info(f'Critic model files to load:\n{local_critic_path} ')
+        else:
+            local_critic_path = None
+            task_logger.info(f'Critic model files are not exist. Start training without it.')
+
+        load_reply_buffer_path = os.path.join(db_load_dir, 'replay_buffer')
+        if os.path.isdir(load_reply_buffer_path):
+            task_logger.info(f'Replay buffer folder :\n{load_reply_buffer_path} ')
+        else:
+            load_reply_buffer_path = None
+            task_logger.info(f'Replay Buffer folder does not exists. Start training without it.')
+
         s_id        = 1
         env_seed    = start_seed + (s_id - 1) * 10
         np.random.seed(env_seed)    # This is the top level where we set the seed. Other levels will set seeds also.
@@ -301,10 +356,11 @@ def train_session(root_dir, session_call_id, start_seed=92736, n_episodes=2500, 
                                     # (see bellow)
         db_save_dir             = os.path.join(root_dir, f'session_{s_id}')     # Create the session sub-folder.
         pathlib.Path(db_save_dir).mkdir(parents=True, exist_ok=True)
+
         # Train sessions
         max_average_score_episode, max_average_score = train_env_agents(
-            n_episodes, tmax, env_seed=env_seed,local_actor_path=None,
-            local_critic_path=None,load_reply_buffer_path=None, save_dir=db_save_dir)
+            n_episodes, tmax, env_seed=env_seed, local_actor_path=local_actor_path,
+            local_critic_path=local_critic_path, load_reply_buffer_path=load_reply_buffer_path, save_dir=db_save_dir)
         task_logger.info(f'session_{session_call_id}: max_average_score={max_average_score:.4f}, '
                          f'max_average_score_episode={max_average_score_episode}')
 
@@ -336,7 +392,10 @@ def train_session(root_dir, session_call_id, start_seed=92736, n_episodes=2500, 
         db_load_dir = os.path.join(root_dir, f'session_{session_to_load_id}')
         local_actor_path        = os.path.join(db_load_dir, 'checkpoint_best_actor')
         local_critic_path       = os.path.join(db_load_dir, 'checkpoint_best_critic')
-        load_reply_buffer_path  = os.path.join(db_load_dir, 'replay_buffer')
+        # Get last RBuf because it has more samples which also are newest:
+        rbuf_load_dir = os.path.join(root_dir, f'session_{np.max(set_session_ids)}')
+        load_reply_buffer_path  = os.path.join(rbuf_load_dir, 'replay_buffer')
+        task_logger.info(f'Replay buffer folder :\n{load_reply_buffer_path} ')
 
         s_id        = 1 + np.max(set_session_ids)  # Create actual session ID in increasing order
         env_seed    = start_seed + (s_id - 1) * 10
@@ -393,7 +452,7 @@ def train_session(root_dir, session_call_id, start_seed=92736, n_episodes=2500, 
     pass
 
 
-def train_session_parse_arguments(logger):
+def train_session_parse_arguments():
     # root_dir, start_average_max_score=-sys.float_info.max, n_sessions=2, start_seed=92736, n_episodes=2500, tmax=1000
     parser = argparse.ArgumentParser()
     parser.add_argument('--root_dir', default='./debug/dbg_agents_set', type=str, required=True,
@@ -403,9 +462,9 @@ def train_session_parse_arguments(logger):
     parser.add_argument('--n_episodes', default=2500, type=float, required=False,
                         help='A number of episodes to train per session.')
     parser.add_argument('--start_seed', default=92736, type=int, required=False,
-                        help='A number of episodes to train per session.')
+                        help='A seed in first session.')
     args = parser.parse_args()
-    logger.info(f'args The training set args:  \n{args}')
+    print(f'args The training set args:  \n{args}')
     return args
 
 
@@ -434,14 +493,12 @@ if __name__ == '__main__':
     " ----------------- To train untrained models ---------------------"
     local_actor_path    = None
     local_critic_path   = None
-    load_reply_buffer_path = './ReplayBuf/RBuf_pos-0.75_neg-0.2-zero-0.05_min-sz-30000_imbalance_0.0001/replay_buffer'
-    # load_reply_buffer_path = './debug/actor_loss/RBuf_200(.75-.20-.05)/replay_buffer'
-    # load_reply_buffer_path = None  # './replayBuf_212_sigma-0.44_Drop/replay_buffer'
+    load_reply_buffer_path = None
 
-    n_episodes = 500  # 2500  # 200  # 60000  # 1000  # 800
+    n_episodes = 25000  # 25000  # 15000  # 2500  # 200  # 60000  # 1000  # 800
     tmax = 1000  # 1000
     env_seed = 92736
-    save_dir = './debug/actor_loss/16_Drop'
+    save_dir    = './debug/episode_update_RBuf/3_collect-rbuf-1_ep-25000'
     pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True)
     train_env_agents(n_episodes, tmax, env_seed=env_seed,
                      local_actor_path=local_actor_path, local_critic_path=local_critic_path,
@@ -449,36 +506,36 @@ if __name__ == '__main__':
 
     " -------------- To train pretrained models --------------------------"
     # # db_dir = './database_replay/(1816, 1835)_16_18'
-    # # db_dir = './database_replay/(1302, 1316)_0-6_16'
-    # # db_dir = './database_replay/(1257, 1383)_7-8'
-    # # db_dir = './database_replay/(1238, 1251)_18_22'
-    # # db_dir = './database_replay/(1638, 1655)_22_25'
-    # db_dir = './database_replay/(2919, 2949)_25_31'
+    # db_dir = './train_2_agent[1]/4_agent_1'
     # local_actor_path        = os.path.join(db_dir, 'checkpoint_best_actor')
     # local_critic_path       = os.path.join(db_dir, 'checkpoint_best_critic')
-    # db_dir = './database_replay/(2987, 3017)_31_33'
+    # # db_dir = './database_replay/(2987, 3017)_31_33'
     # load_reply_buffer_path  = os.path.join(db_dir, 'replay_buffer')
-    #
-    # n_episodes = 2500  # 200  # 60000  # 1000  # 800
+    
+    # n_episodes = 25000  # 200  # 60000  # 1000  # 800
     # tmax = 1000
-    # env_seed = 92736 + 2  # 563109 + 1000*(10-1)
+    # env_seed = 92736 # !!! Change seed by on each additional training !!!
+    # save_dir    = './train_2_agent[1]/7_agent-1_sigmaReduction-0.99_aLr-1.5e-4_ep-25000'
     # train_env_agents(n_episodes, tmax, env_seed=env_seed,
-    #                  local_actor_path=local_actor_path, local_critic_path=local_critic_path,
-    #                  load_reply_buffer_path=load_reply_buffer_path)
-    #
+                     # local_actor_path=local_actor_path, local_critic_path=local_critic_path,
+                     # load_reply_buffer_path=load_reply_buffer_path, save_dir=save_dir)
+    
     # # results_file_name_suffix = 'main_test'
     # # check_gradient_loss(dir_name='./', file_name_suffix=results_file_name_suffix)
 
     " ---------------------- To Train Set of Trainings ---------------------"
-    # main_log_name = 'log_train_set.log'
-    # main_logger = task_logger = create_logger(root_dir='.', log_name=main_log_name)
-    # args = train_session_parse_arguments(main_logger)
+    # args = train_session_parse_arguments()
     #
     # agents_set_root         = args.root_dir
     # session_call_id         = args.session_call_id
     # start_seed              = args.start_seed
     # n_episodes              = args.n_episodes
     # tmax                    = 1000
+    #
+    # main_log_name = 'log_train_set'
+    # main_logger = create_logger(root_dir=agents_set_root, log_name=main_log_name)
+    # main_logger.info(f'args The training set args:  \n{args}')
+    #
     # status = train_session(root_dir=agents_set_root, session_call_id=session_call_id,
     #                        start_seed=start_seed, n_episodes=n_episodes)
     # sys.exit(status)

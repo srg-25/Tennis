@@ -6,6 +6,9 @@
 
 [2] The article Lowe at all. Multi-Agent Actor-Critic for Mixed Cooperative-Competitive Environments
 
+[3] Udacity GPT, Udacity knowledge[https://knowledge.udacity.com/]. Especially: 
+Senthil[https://knowledge.udacity.com/questions/303326], Jonas[https://knowledge.udacity.com/questions/65068]
+
 This is the main parts description only. See more details in the python source and configuration files. 
 
 ### Classes

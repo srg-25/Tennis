@@ -75,6 +75,7 @@ def plot_window_average_episode_score(max_scores, win_size=100, episode_score_ma
     plt.legend(loc="center right")
 
     # plt.show()
+    # plt.close(fig)
     return fig, max_average_score_episode, max_average_score
 
 
@@ -93,6 +94,7 @@ def plot_episode_score(scores):
     plt.ylabel('Score')
     plt.xlabel('Episode #')
     plt.show()
+    plt.close(fig)
 
 
 def plot_episode_score_details(scores):
@@ -118,9 +120,10 @@ def plot_episode_score_details(scores):
     plt.ylabel('Score')
     plt.xlabel('Episode #')
     plt.show()
+    plt.close(fig)
 
 
-def plot_score_1_dim(score_path=None, title='scores', x_label='Iteration #',
+def plot_score_1_dim(score_path=None, title='scores', x_label='Iteration #', y_label='Score',
                      file_name_suffix='', show_figure=False, start_pos=0):
     # task_name = 'plot_score_1_dim'
     # print(f'{task_name}: -------------- Start ---------------')
@@ -132,7 +135,7 @@ def plot_score_1_dim(score_path=None, title='scores', x_label='Iteration #',
     plt.plot(scores, color='blue', ls=':')
     plt.title(title)
     # plt.legend(['max', 'average', 'min'])
-    plt.ylabel('Score')
+    plt.ylabel(y_label)
     plt.xlabel(x_label)
 
     dirname = os.path.dirname(score_path)
@@ -141,6 +144,7 @@ def plot_score_1_dim(score_path=None, title='scores', x_label='Iteration #',
 
     if show_figure:
         plt.show()
+    plt.close(fig)
     # print(f'{task_name}: -------------- End ---------------')
 
 
@@ -238,6 +242,7 @@ def check_plot_average_episode_score(average_scores_path=None, max_win_sz=100, t
     dirname = os.path.dirname(average_scores_path)
     # basename_without_ext = os.path.splitext(os.path.basename(average_scores_path))[0]
     plt.savefig(os.path.join(dirname, "avrg_max_scores" + file_name_suffix + '.jpg'))
+    plt.close(fig)
     print(f'{task_name}: -------------- End ---------------')
     return max_average_score_episode, max_average_score
 
@@ -310,10 +315,11 @@ if __name__ == '__main__':
     # test_name = '_dbg_save_plot'
     # check_gradient_loss(file_name_suffix=test_name)
     #
-    # number_trained_epochs = 200
-    # average_scores_path = '../Environment_Agent.maddpg_mlp_average_max_scores.npy'
-    # check_plot_average_episode_score(average_scores_path=average_scores_path, tail_sz=number_trained_epochs,
-    #                                  file_name_suffix=test_name)
+    number_trained_epochs = 15000
+    average_max_scores_file_name_dir = 'C:/Data/Study/Udacity/DeeoReinforcementLearning/Cource4/Code/Progect/p3_collaboration-competition_pos-neg-rbuf/pos-neg-buf/1_rbuf-512_ep-15000'
+    average_scores_path = os.path.join(average_max_scores_file_name_dir,'Environment_Agent.maddpg_mlp_average_max_scores.npy')
+    check_plot_average_episode_score(average_scores_path=average_scores_path, tail_sz=number_trained_epochs,
+                                     file_name_suffix='')
 
     # start_pos = 1000
     # dir = '../database_replay/(1302, 1316)_0-6_16'
@@ -323,9 +329,9 @@ if __name__ == '__main__':
     # title = f'Critic_Loss_begin_id{start_pos}'
     # plot_score_1_dim(score_path, title=title, file_name_suffix=f'_dbg_{start_pos}', show_figure=True, start_pos=start_pos)
 
-    load_dir = 'C:/Data/Study/Udacity/DeeoReinforcementLearning/Cource4/Code/Progect/p3_collaboration-competition/debug/dbg_critic_sqrt-mse'
-    s_id = 11
-    save_dir = os.path.join(load_dir, f'session_{s_id}')
-    logger = create_logger(root_dir='.', log_name=f'log_plot.log')
-
-    plot_training_sessions_history(load_dir=load_dir, save_dir=save_dir, logger=logger, show_figure=False)
+    # load_dir = 'C:/Data/Study/Udacity/DeeoReinforcementLearning/Cource4/Code/Progect/p3_collaboration-competition/debug/dbg_critic_sqrt-mse'
+    # s_id = 11
+    # save_dir = os.path.join(load_dir, f'session_{s_id}')
+    # logger = create_logger(root_dir='.', log_name=f'log_plot.log')
+    #
+    # plot_training_sessions_history(load_dir=load_dir, save_dir=save_dir, logger=logger, show_figure=False)

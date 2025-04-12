@@ -56,20 +56,19 @@ class Agent:
         self.agent_id = agent_id
         self.n_agents = n_agents
 
-        self.lr_actor = self.cfg['lr_actor']
-        self.lr_critic = self.cfg['lr_critic']
+        self.lr_actor = self.cfg['lr_actor'][self.agent_id]
+        self.lr_critic = self.cfg['lr_critic'][self.agent_id]
         self.buffer_size = self.cfg['buffer_size']
         self.batch_size = self.cfg['batch_size']
-        self.gamma = self.cfg['gamma']
-        self.tau = self.cfg['tau']
-        self.weight_decay = self.cfg['weight_decay']
+        self.gamma = self.cfg['gamma'][self.agent_id]
+        self.tau = self.cfg['tau'][self.agent_id]
+        self.weight_decay = self.cfg['weight_decay'][self.agent_id]
 
-        self.is_uniform_noise_sample = self.cfg['noise_sampling_uniformly']
-        self.add_noise = self.cfg['add_noise']
-        self.noise_mu = self.cfg['noise_mu']
-        self.noise_theta = self.cfg['noise_theta']
-        self.noise_sigma = self.cfg['noise_sigma']
-        self.noise_sigma_reduction = self.cfg['noise_sigma_reduction']
+        self.is_uniform_noise_sample = self.cfg['noise_sampling_uniformly'][self.agent_id]
+        self.noise_mu = self.cfg['noise_mu'][self.agent_id]
+        self.noise_theta = self.cfg['noise_theta'][self.agent_id]
+        self.noise_sigma = self.cfg['noise_sigma'][self.agent_id]
+        self.noise_sigma_reduction = self.cfg['noise_sigma_reduction'][self.agent_id]
 
         self.logger.info(f'{type(self).__name__}.__init__(): agent_{self.agent_id} '
                          f'lr_actor = {self.lr_actor}, lr_critic = {self.lr_critic}, '
@@ -280,6 +279,21 @@ class Agent:
         """
         for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
             target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
+
+    def hard_update(self, local_model, target_model, use_state_dict = True):
+        """Hard update model parameters.
+        θ_target = θ_local
+
+        Params
+        ======
+            local_model: PyTorch model (weights will be copied from)
+            target_model: PyTorch model (weights will be copied to)
+        """
+        if use_state_dict:
+            target_model.load_state_dict(local_model.state_dict())
+        else:
+            for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
+                target_param.data.copy_(local_param.data)
 
     def load_models(self, local_actor_path='checkpoint_actor.pth', local_critic_path='checkpoint_critic.pth'
                     , target_actor_path=None, target_critic_path=None):

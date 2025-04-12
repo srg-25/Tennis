@@ -36,15 +36,15 @@ def get_agent_config_seed(agent_config):
     return agent_config['seed']
 
 
-def set_global_seed_in_libs(agent_config):
+def set_global_seed_in_libs(seed):
     """
-    set agent_config['seed'] to libraries and tools
-    :param agent_config: an agent configuration dictionary
+    set seed to libraries and tools
+    :param seed
     :return: None
     """
-    torch.manual_seed(agent_config['seed'])
-    np.random.seed(agent_config['seed'])
-    random.seed(agent_config['seed'])
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 # ----------------- Checks ----------------

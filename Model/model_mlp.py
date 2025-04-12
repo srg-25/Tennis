@@ -1,5 +1,9 @@
 """
 This is Udacity actor and critic model mostly.
+But I changed Critic state and action concatenation to be before fcs1 layer like in the Git of
+Senthil[https://knowledge.udacity.com/questions/303326]
+
+I added also BN and Drops regularization to solve big gradient problem
 
 Optionally (NOT Used Currently):
     Actor may use differentiable clamp function instead of tanh on MLP output
@@ -88,14 +92,14 @@ class Actor(nn.Module):
         if self.regularization == self.regularization_BN:
             self.regular1 = nn.Sequential(nn.BatchNorm1d(self.fc1_units), nn.ReLU())
         elif self.regularization == self.regularization_DropOut:
-            self.regular1 = nn.Sequential(nn.ReLU(), nn.Dropout(self.drop_out_val))
+            self.regular1 = nn.Sequential(nn.ReLU(), nn.Dropout(self.drop_out_val[0]))
         else:
             assert False
         self.fc2 = nn.Linear(self.fc1_units, self.fc2_units)
         if self.regularization == self.regularization_BN:
             self.regular2 = nn.Sequential(nn.BatchNorm1d(self.fc2_units), nn.ReLU())
         elif self.regularization == self.regularization_DropOut:
-            self.regular2 = nn.Sequential(nn.ReLU(), nn.Dropout(self.drop_out_val))
+            self.regular2 = nn.Sequential(nn.ReLU(), nn.Dropout(self.drop_out_val[1]))
         else:
             assert False
         self.fc3 = nn.Linear(self.fc2_units, action_size)
@@ -153,20 +157,28 @@ class Critic(nn.Module):
         self.regularization = regularization
         self.drop_out_val   = drop_out_val
 
-        self.fcs1 = nn.Linear(state_size, self.fcs1_units)
+        # Change Udacity code by moving state and action concatenation before fcs1 like in:
+        #  https://github.com/SENC/AiTennis/blob/master/sourcecode/nn_model.py
+        # self.fcs1 = nn.Linear(state_size, self.fcs1_units)
+        self.fcs1 = nn.Linear(self.state_size + self.action_size, self.fcs1_units)
+
         if self.regularization == self.regularization_BN:
             self.regular1 = nn.Sequential(nn.BatchNorm1d(self.fcs1_units), nn.ReLU())
         elif self.regularization == self.regularization_DropOut:
-            self.regular1 = nn.Sequential(nn.ReLU(), nn.Dropout(self.drop_out_val))
+            self.regular1 = nn.Sequential(nn.ReLU(), nn.Dropout(self.drop_out_val[0]))
         elif self.regularization == self.regularization_No:
             self.regular1 = nn.ReLU()
         else:
             assert False
-        self.fc2 = nn.Linear(self.fcs1_units+action_size, self.fc2_units)
+
+        # Change Udacity code like in the Git of Senthil[https://knowledge.udacity.com/questions/303326]
+        # self.fc2 = nn.Linear(self.fcs1_units+action_size, self.fc2_units)
+        self.fc2 = nn.Linear(self.fcs1_units, self.fc2_units)
+
         if self.regularization == self.regularization_BN:
             self.regular2 = nn.Sequential(nn.BatchNorm1d(self.fc2_units), nn.ReLU())
         elif self.regularization == self.regularization_DropOut:
-            self.regular2 = nn.Sequential(nn.ReLU(), nn.Dropout(self.drop_out_val))
+            self.regular2 = nn.Sequential(nn.ReLU(), nn.Dropout(self.drop_out_val[1]))
         elif self.regularization == self.regularization_No:
             self.regular2 = nn.ReLU()
         else:
@@ -183,15 +195,13 @@ class Critic(nn.Module):
         """Build a critic (value) network that maps (state, action) pairs -> Q-values."""
 
         # --------- With ReLU only --------------------
-        xs = self.regular1(self.fcs1(state))
-        x = torch.cat((xs, action), dim=1)
-        x = self.regular2(self.fc2(x))
 
-        # -------- With Batch Normalization --------------
-        # xs = self.bn1(self.fcs1(state))
+        # Change like in the Git of Senthil[https://knowledge.udacity.com/questions/303326]
+        # xs = self.regular1(self.fcs1(state))
         # x = torch.cat((xs, action), dim=1)
-        # x = self.bn2(self.fc2(x))
-
+        xs = torch.cat((state, action), dim=1)
+        x = self.regular1(self.fcs1(xs))
+        x = self.regular2(self.fc2(x))
         return self.fc3(x)
 
 
